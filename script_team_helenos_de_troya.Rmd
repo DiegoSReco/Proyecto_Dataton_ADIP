@@ -1,0 +1,623 @@
+---
+title: "El rol de los gobiernos locales frente a los efectos de la pandemia de COVID-19"
+author: "Diego Sánchez Rojas & Helena Gomez Valenzuela"
+date: "22/10/2021"
+output: html_document
+runtime: shiny
+resource_files:
+- map_cdmx_info.dbf
+- map_cdmx_info.shx
+- map_cdmx_info.prj
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align='center', out.width='85%', error=TRUE)
+```
+
+
+
+```{r  library, include=FALSE, warning=FALSE} 
+if (!require('pacman')) {  install.packages('pacman')}
+
+#devtools::install_github("RodrigoZepeda/gobmx")
+
+p_load( "dplyr", "ggplot2",  "readxl", "tidyverse",
+        "data.table", "lubridate","gobmx", "sjmisc",
+        "fuzzyjoin","extrafont",   "rgdal","leaflet","plotly", "rmarkdown")
+
+df_inventario <-  read.csv("inventario_prueva.csv", 
+                           encoding = "UTF-8")
+
+```
+
+
+
+
+Panorama de acciones implementadas por la CDMX y gobiernos locales  
+===============================================================================
+
+
+
+
+
+
+## 1. Intrumentos por su naturaleza a nivel Ciudad de México y gobiernos locales 
+
+
+\n
+
+```{r clean, include=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+
+alcaldia1 <- c("Álvaro Obregón", "Azcapotzalco", "Benito Juárez",  "Coyoacán" ,
+               "Cuajimalpa", "Cuauhtémoc",  "Gustavo A. Madero", "Iztacalco",
+              "Iztapalapa","Magdalena Contreras","Miguel Hidalgo", "Milpa Alta",         
+              "Tláhuac","Tlalpan" , "Venustiano Carranza", "Xochimilco")
+
+                
+                                                                                 
+            
+#Variable nivel_gob <- CDMX
+data_respuesta <- df_inventario %>% 
+                  filter(version!="Pasada" ) %>% 
+                  mutate(nivel_gob=if_else( !(unidad_responsable  %in% alcaldia1),
+                                            "CDMX",
+                                            unidad_responsable ),
+                         fecha_publicacion_gaceta=format(as.Date(fecha_publicacion_gaceta,format = "%d/%m/%Y"), "%Y-%m-%d"))
+
+
+
+data_respuesta <- data_respuesta %>% 
+                  filter(fecha_publicacion_gaceta> "2020-03-17" )%>% 
+                  mutate(corte_publicación=case_when(
+                         (fecha_publicacion_gaceta >"2020-03-17") & (fecha_publicacion_gaceta <"2020-05-31")~"JNSD",
+                         fecha_publicacion_gaceta >"2020-05-31" ~"No-JNSD")) 
+
+
+
+```
+
+
+
+<br />
+
+
+\n
+```{r plot1,   echo=FALSE, warning=FALSE, message=FALSE }
+
+pal   <- (gobmx_palette("CDMX2", n = 8, type =  "continuous"))
+
+
+data_respuesta<-
+  data_respuesta %>% 
+  filter(n_instrumento!='embarazos' & n_instrumento!='otro') %>% 
+  mutate(n_instrumento=case_when(
+         n_instrumento=="asistencia social"~ 'Asistencia social',
+         n_instrumento=="mercado laboral"~ 'Mercado laboral',
+         n_instrumento=="seguridad social"~ 'Seguridad social',
+         n_instrumento=="fiscales"~ 'Fiscales y financieras'),
+         nivel_gob=factor(nivel_gob, ordered = T))
+
+
+color1 <- ifelse(unique(data_respuesta$nivel_gob)=='CDMX',"red", "black")
+
+plot_1<- ggplot(  data_respuesta, aes(x = fct_rev(forcats::fct_infreq(nivel_gob)), 
+                                      color=n_instrumento,
+                                      fill=n_instrumento,
+                                      text=paste0("Nombres del programa",nombre_programa_accion_social))) +
+  coord_flip() +
+  geom_bar(
+           width=1,
+           color='white',
+           size=1
+  ) +
+  geom_text(aes(label = ..count.., group=nivel_gob), 
+            stat = "count",
+            color="black",  
+             vjust = 0.5, nudge_y = 0.8) +
+
+  
+  labs( title= "Acciones en la CDMX y gobiernos locales por la naturaleza del instrumento\n",
+    x=NULL,
+    y="Número de programas",
+    fill=NULL       , caption="Nota: Clasificación con base en metodología del documento Federalismo Covid del LNPP(2020)\nPeríodo de publicación de los programas del 23 de marzo al 31 de diciembre del 2020.\nFuente: Elaboración propia con información del portal de datos abierto de la CDMX."
+
+  ) +
+  theme_light()+
+  theme(panel.grid.major.x = element_line(color="#dedede", linetype = 'dotted'),
+        plot.title = element_text(hjust = 0.5, lineheight = 1, size=16),
+        plot.caption = element_text(hjust = 0, size=10),
+        legend.position = c("bottom"),
+        axis.text.y =element_text(colour=rev(color1)),
+        text=element_text(size=16, family="serif"))+
+  #text=element_text(size=12, family="sans"))+
+  scale_fill_manual(name = "", values = pal)
+
+
+
+ggplotly(plot_1, tooltip = c('text'))
+
+```
+
+
+
+
+\n
+### Clasifiación de los intrumentos por su naturaleza y corte publicación (Jornanda Nacional de Sana Distancia (JNSD) vs Post-JNSD)  
+
+
+\n
+\n
+\n
+```{r jnsd_vs_no, echo=FALSE, warning=FALSE, message=FALSE}
+plot_2<- ggplot(  data_respuesta, aes(x = fct_rev(forcats::fct_infreq(nivel_gob)), 
+                                      color=n_instrumento,
+                                      fill=n_instrumento,
+                                      text=paste("Nombres del programa:",nombre_programa_accion_social
+    ))) +
+  coord_flip() +
+  geom_bar(
+    width=1,
+    color='white',
+    size=1
+  ) +
+  geom_text(aes(label = ..count.., group=nivel_gob), 
+            stat = "count",
+            color="black",  
+            vjust = 0.5, nudge_y = 0.8) +
+  facet_grid(~corte_publicación)+
+  
+  
+  ggtitle("")+
+  labs(
+    y="Número de programas",
+    x=NULL,
+    fill=NULL,
+    caption="Nota: Clasificación con base en metodología del documento Federalismo Covid del LNPP(2020)\nJornada Nacional de Sana Distancia (JNSD) es el período del 23 de marzo al 30 de mayo de 2020,\n y el período posterior es del 1 de junio a diciembre de 2020.\nFuente: Elaboración propia con información del portal de datos abierto de la CDMX."
+  ) +
+  theme_light()+
+  theme(panel.grid.major.x = element_line(color="#dedede", linetype = 'dotted'),
+        plot.title = element_text(hjust = 0.5, lineheight = 1, size=16),
+        plot.caption = element_text(hjust = 0, size=10),
+        legend.position = c("bottom"),
+        axis.text.y =element_text(colour=rev(color1)),
+        text=element_text(size=16, family="serif"))+
+  #text=element_text(size=12, family="sans"))+
+  scale_fill_manual(name = "", values = pal)
+
+ggplotly(plot_2, tooltip = c('text'))
+
+
+```
+
+
+
+Nota: Clasificación con base en metodología del documento Federalismo Covid del LNPP(2020). Jornada Nacional de Sana Distancia (JNSD) es el período del 23 de marzo al 30 de mayo de 2020, y el período posterior es del 1 de junio a diciembre de 2020. Fuente: Elaboración propia con información del portal de datos abierto de la CDMX
+
+
+### Tipo de instrumentos en CDMX y alcaldías
+
+
+
+
+```{r tipo_cdmx, eval=FALSE, echo=FALSE, warning=FALSE, message=FALSE, error=FALSE }
+
+  b_data <- data_respuesta %>% 
+    filter(n_instrumento!='embarazos' & n_instrumento!='otro') %>% 
+    mutate(tipo_apoyo=case_when(
+      tipo_apoyo_unidad  %in% c('Apoyo económico o servicios', 'Servicios' ,  'Servicio' ,'Varios') ~ 'Otros',
+      tipo_apoyo_unidad  == 'Apoyo económico' ~ 'Apoyo económico',
+      tipo_apoyo_unidad  %in%  c('Apoyo en especie', 'Vales', 'Apoyo económico o en especie') ~ 'Apoyo en especie',
+      is.na(tipo_apoyo_unidad )~ 'Otros'),
+      nivel_gob=factor(nivel_gob, ordered = T)) 
+
+  
+ plot_3 <- b_data %>% 
+             ggplot(aes(x=fct_infreq(n_instrumento), y=1, fill=tipo_apoyo, text=paste("Nombres del programa:", nombre_programa_accion_social))) +
+             geom_bar(size=1,
+                      width=.6, height=2, stat="identity", alpha=2)+
+             ggtitle("Instrumentos del gobierno de la CDMX por su naturaleza y tipo  3*\n")+
+            labs( x=NULL,
+           y=NULL,
+           fill=NULL) +
+
+          theme_light()+
+           theme_light()+
+  theme(panel.grid.major.x = element_line(color="#dedede", linetype = 'dotted'),
+        plot.title = element_text(hjust = 0.5, lineheight = 1, size=14),
+        plot.caption = element_text(hjust = 0, size=10),
+        legend.position = c("bottom"),
+        axis.text.y =element_text(colour=rev(color1)),
+        text=element_text(size=14, family="serif"))+
+  scale_fill_manual(name = "", values = pal)
+ 
+plot_3 
+
+
+
+```
+
+
+
+
+
+
+
+```{r tipo_alcaldia, echo=FALSE, out.width="85%", warning=FALSE, error=FALSE}
+ b_data<-
+    data_respuesta %>% 
+    filter(n_instrumento!='embarazos' & n_instrumento!='otro') %>% 
+    mutate(tipo_apoyo=case_when(
+      tipo_apoyo_unidad  %in% c('Apoyo económico o servicios', 'Servicios' ,  'Servicio' ,'Varios') ~ 'Otros',
+      tipo_apoyo_unidad  == 'Apoyo económico' ~ 'Apoyo económico',
+      tipo_apoyo_unidad  %in%  c('Apoyo en especie', 'Vales', 'Apoyo económico o en especie') ~ 'Apoyo en especie',
+       is.na(tipo_apoyo_unidad )~ 'Otros'),
+      nivel_gob=factor(nivel_gob, ordered = T)) 
+
+  plot_4<-    ggplot(b_data, aes(x=fct_rev(forcats::fct_infreq(n_instrumento)) ,1, fill=tipo_apoyo,
+                                 text=paste("Nombres del programa:",nombre_programa_accion_social)))  +
+    geom_bar(size=1,width=1,stat="identity",  color='white')+
+    facet_wrap(~nivel_gob, nrow=5, ncol=4)+
+    labs( title= "Programas por tipo y naturaleza del instrumento en cada alcaldía de la CDMX 3*\n",
+      x=NULL,
+      y="Número de programas",
+      fill=NULL
+      #caption="Nota: Clasificación con base en metodología del documento Federalismo Covid del LNPP(2020)\nPeríodo de publicación de los programas del 23 de marzo al 31 de diciembre del 2020.\nFuente: Elaboración propia con información del portal de datos abierto de la CDMX."
+      
+    ) +
+      coord_flip()+
+    theme_light()+
+    theme(panel.grid.major.x = element_line(color="#dedede", linetype = 'dotted'),
+         plot.title = element_text(hjust = 0.5, lineheight = 1, size=14),
+         plot.caption = element_text(hjust = 0),
+         legend.position = c("bottom"),
+         axis.text.y =element_text(colour=rev(color1)),
+         text=element_text(size=14, family="serif"))+
+    scale_fill_manual(name = "", values = pal)
+  
+ 
+
+  
+ggplotly(plot_4, tooltip = c('text'))
+
+
+
+
+
+```
+
+
+
+
+
+
+##  2. Presupuesto   
+
+
+
+
+
+
+```{r data_pres, echo=FALSE, out.width="85%", warning=FALSE, message=FALSE, error=FALSE}
+library(scales)
+
+
+data_plot7 <- data_respuesta %>% 
+  # select(nivel_gob, n_instrumento,presupuesto_mxn) %>% 
+  filter(nivel_gob!='CDMX') %>% 
+  group_by(nivel_gob) %>% 
+  summarise(n= (sum(presupuesto_mxn)),  .groups = "keep") 
+
+data_plot7$n <- as.numeric(gsub(",","",as.character(data_plot7$n)))
+
+data_plot7[ ,"El presupuesto ($) fue de"] <-(format(data_plot7$n, big.mark=",", nsmall = 0))
+
+data_plot7$label <- paste(data_plot7$nivel_gob, data_plot7$`Presupuesto ($)`, sep = "\n")
+
+
+
+
+```
+
+
+
+<br />
+
+
+\n
+
+
+```{r presupuesto, echo=FALSE, out.width="85%", warning=FALSE, error=FALSE, message=FALSE}
+
+
+
+
+pal1   <- rev(gobmx_palette("CDMX2", n =3, type =  "continuous"))
+
+
+t <- list(family = "sans serif", size=16, color = 'black')
+
+tree <- plot_ly(
+  data_plot7,
+  labels = ~nivel_gob ,
+  parents = NA,
+  values = ~ n,
+  type = 'treemap',
+  hovertemplate = "El presupuesto fue de: $%{value}<extra></extra>") %>% 
+  layout(title = "Distribución del presupuesto total por alcaldía \n",
+         colorway = pal,  font = t)
+tree
+
+
+
+```
+
+?rpubsUpload
+
+
+### Distribución del presupuesto por tipo de apoyo  y naturaleza 
+
+
+
+```{r  plot_5, echo=FALSE, out.width="85%", warning=FALSE, warning=FALSE, message=FALSE}
+
+  
+  
+df_cdmx <- data_respuesta %>% 
+           select(nivel_gob, n_instrumento,presupuesto_mxn) %>% 
+           group_by(nivel_gob,n_instrumento) %>%
+           summarise(n= sum(presupuesto_mxn)) %>% 
+           mutate(percentage=round(n/sum(n)*100,2)) %>% 
+           ungroup()
+  
+
+
+colorcdmx <- ifelse(df_cdmx$nivel_gob == "CDMX", "red", "black")
+
+plot_5 <- df_cdmx  %>%  
+  ggplot(aes(x= fct_rev(fct_infreq(nivel_gob)), y=(percentage ), fill = n_instrumento, 
+             text=paste(percentage,"%")))+
+  geom_bar(position = "fill", 
+           stat = "identity",
+           width=.8,alpha=.80)+
+  #geom_text(aes(label=paste(percentage,"%")), position=position_fill(vjust=0.5), color="grey", size=4.5, alpha=.9)+
+    theme_minimal()+
+  labs(title="Distribución del presupuesto asignado a los programas por naturaleza del instrumento \n",
+    x=NULL,
+    y=NULL,
+    fill=NULL,
+    caption="Nota: Clasificación con base en metodología del documento Federalismo Covid del LNPP(2020)\nPeríodo de publicación de los programas del 23 de marzo al 31 de diciembre del 2020.\nFuente: Elaboración propia con información del portal de datos abierto de la CDMX."
+    
+  ) +
+  theme_light()+
+  theme(panel.grid.major.x = element_line(color="#dedede", linetype = 'dotted'),
+          plot.title = element_text(hjust = 0, lineheight = 1, size=16),
+          plot.caption = element_text(hjust = 0, size=12),
+         legend.position = c("bottom"),
+          text=element_text(size=16, family="serif"))+
+  scale_fill_manual(name = "", values = pal)+
+  coord_flip()
+
+
+ggplotly(plot_5, tooltip = c('text'))
+
+
+
+
+```
+Nota: Clasificación con base en metodología del documento Federalismo Covid del LNPP(2020). Período de publicación de los programas del 23 de marzo al 31 de diciembre del 2020. Fuente: Elaboración propia con información del portal de datos abierto de la CDMX.
+
+
+
+
+
+
+
+
+
+
+
+```{r,  plot_6,  echo=FALSE, out.width="85%", warning=FALSE, error=FALSE,  message=FALSE}
+
+#PLOT6
+
+
+
+data_plot6 <- b_data %>% 
+ # select(nivel_gob, n_instrumento,presupuesto_mxn) %>% 
+  group_by(nivel_gob, tipo_apoyo) %>%
+  summarise(n= sum(presupuesto_mxn)) %>% 
+  mutate(percentage=round(n/sum(n)*100,2)) %>% 
+  ungroup()
+
+
+
+colorcdmx <- ifelse(df_cdmx$nivel_gob == "CDMX", "red", "black")
+
+plot_6 <- data_plot6  %>%  
+  ggplot(aes(x= (fct_infreq(nivel_gob)), y=(percentage ), fill = tipo_apoyo,
+             text=paste(percentage,"%")))+
+  geom_bar(position = "fill", 
+           stat = "identity",
+           width=.8,alpha=.80)+
+  #geom_text(aes(label=paste(percentage,"%")), position=position_fill(vjust=0.5), color="grey", size=4.5, alpha=.9)+
+  theme_minimal()+
+  labs(title="Distribución del presupuesto por tipo de apoyo \n",
+       x=NULL,
+       y=NULL,
+       fill=NULL,
+       caption="Nota: En otros tipos de apoyo se incluyen terapias, cursos y apoyo para abortar, etc.\nPeríodo de publicación de los programas del 23 de marzo al 31 de diciembre del 2020.\nFuente: Elaboración propia con información del portal de datos abierto de la CDMX."
+       
+  ) +
+theme_light()+
+  theme(panel.grid.major.x = element_line(color="#dedede", linetype = 'dotted'),
+          plot.title = element_text(hjust = 0, lineheight = 1, size=16),
+          plot.caption = element_text(hjust = 0, size=12),
+         legend.position = c("bottom"),
+          text=element_text(size=16, family="serif"))+
+  scale_fill_manual(name = "", values = pal)+
+  coord_flip()
+
+
+ggplotly(plot_6, tooltip = c('text'))
+```
+Nota: En otros tipos de apoyo se incluyen terapias, cursos y apoyo para abortar, etc. Período de publicación de los programas del 23 de marzo al 31 de diciembre del 2020. Fuente: Elaboración propia con información del portal de datos abierto de la CDMX
+
+
+
+
+
+##  3. Beneficiarios 
+
+En esta sección mostramos los beneficarios de los programas de financiamiento a microempresarios, seguro de desempleo y apoyo económico 
+a personas que ejercen el comercio en vía pública.
+
+
+```{r    base_mapa, echo=FALSE, out.width="85%", include = FALSE, warning=FALSE, error=FALSE,  message=FALSE}
+library(rgdal)
+
+map_cdmx_info <- rgdal:: readOGR("map_cdmx_info.shp")
+ map_cdmx_info@data <-  map_cdmx_info@data %>%
+  mutate(Alcaldia= case_when(
+    nomgeo == "lvaro Obregn"  ~"Álvaro Obregón",
+    nomgeo == "Xochimilco"    ~  "Xochimilco",
+    nomgeo == "Azcapotzalco"  ~  "Azcapotzalco",
+    nomgeo==  "Benito Jurez"  ~  "Benito Juárez",
+    nomgeo==   "Coyoacn"       ~  "Coyoacán",
+    nomgeo== "Cuajimalpa de Morelos" ~  "Cuajimalpa de Morelos",
+    nomgeo== "Cuauhtmoc" ~  "Cuauhtémoc",
+    nomgeo== "Gustavo A. Madero" ~   "Gustavo A. Madero",
+    nomgeo==  "Iztacalco"  ~  "Iztacalco",
+    nomgeo== "Iztapalapa"  ~  "Iztapalapa",
+    nomgeo== "La Magdalena Contreras" ~  "La Magdalena Contreras",
+    nomgeo== "Miguel Hidalgo" ~  "Miguel Hidalgo",
+    nomgeo== "Milpa Alta" ~  "Milpa Alta",
+    nomgeo==  "Tlhuac"    ~  "Tláhuac",
+    nomgeo==  "Tlalpan"  ~  "Tlalpan",
+    nomgeo== "Venustiano Carranza"  ~  "Venustiano Carranza")) %>% 
+           mutate(id1=ifelse(id==0, 16, id))
+
+```
+
+### Beneficiarios del programa  de financiamiento a microempresarios
+
+
+
+
+```{r    map_1, echo=FALSE, out.width="85%", warning=FALSE, error=FALSE,  message=FALSE}
+cortess  <- c(0.5, 1,3,5,10,13)
+
+
+textoss <- paste(
+  "Alcaldía : ",map_cdmx_info$Alcaldia,"<br/>",
+  "Número de beneficiarios: ",  map_cdmx_info$bnfcrsm, "<br/>",
+    "Tasa de beneficiarios por cada mil habitantes: " , map_cdmx_info$Tsdbnfm,2 ) %>%
+  lapply(htmltools::HTML)
+
+color<-  colorBin(palette = "BuPu", domain=map_cdmx_info$Tsdbnfm , na.color="transparent",bins=cortess)
+
+leaflet(data=map_cdmx_info) %>%  addTiles()%>% 
+  addPolygons(label = ~textoss,
+              
+              weight = 2,
+  opacity = 1,
+  color = "black",
+  dashArray = "3",
+  
+  
+              fillColor = color(map_cdmx_info$Tsdbnfm),
+              fillOpacity=0.7) %>%
+  
+ addLegend(pal = color, values = ~map_cdmx_info$Tsdbnfm, opacity = 0.7,
+           title = "Tasa de beneficiarios",
+          position = "bottomright") %>% 
+addProviderTiles("Esri.WorldGrayCanvas")
+
+
+
+```
+
+
+
+
+
+
+### Beneficiarios del programa de apoyo a comerciantes que ejercen en la vía pública
+
+
+```{r    map_2, echo=FALSE, out.width="85%", warning=FALSE, error=FALSE,  message=FALSE}
+class_of_country <- cut(as.numeric(map_cdmx_info$Tdbpdaac), 2)
+
+
+
+cortess  <- c(0.1 , .5, 0.7, 1)
+
+
+textoss <- paste(
+  "Alcaldía : ",map_cdmx_info$Alcaldia,"<br/>",
+  "Número de beneficiarios: ",  map_cdmx_info$bdaacelvp, "<br/>",
+    "Tasa de beneficiarios por cada mil habitantes: " , map_cdmx_info$Tdbpdaac,2 ) %>%
+  lapply(htmltools::HTML)
+
+color<-  colorBin(palette = "RdPu", domain=map_cdmx_info$Tdbpdaac , na.color="transparent",bins=cortess)
+
+leaflet(data=map_cdmx_info) %>%  addTiles()%>% 
+  addPolygons(label = ~textoss,
+              
+              weight = 2,
+  opacity = 1,
+  color = "black",
+  dashArray = "3",
+  
+  
+              fillColor = color(map_cdmx_info$Tdbpdaac),
+              fillOpacity=0.7) %>%
+  
+ addLegend(pal = color, values = ~map_cdmx_info$Tdbpdaac, opacity = 0.7,
+           title = "Tasa de beneficiarios",
+          position = "bottomright") %>% 
+addProviderTiles("Esri.WorldGrayCanvas")
+
+
+```
+
+
+
+### Beneficiarios del programa de seguro de desempleo 
+
+```{r    map_3, echo=FALSE, out.width="85%", warning=FALSE, error=FALSE,  message=FALSE}
+class_of_country <- cut(as.numeric(map_cdmx_info$Tdbdsdd), 2)
+
+
+
+cortess  <- c(0.1 , .5, 0.7, 1)
+
+
+textoss <- paste(
+  "Alcaldía : ",map_cdmx_info$Alcaldia,"<br/>",
+  "Número de beneficiarios: ",  map_cdmx_info$bnfdsdd, "<br/>",
+    "Tasa de beneficiarios por cada mil habitantes: " , map_cdmx_info$Tdbdsdd,2 ) %>%
+  lapply(htmltools::HTML)
+
+color<-  colorBin(palette = "PuRd", domain=map_cdmx_info$Tdbdsdd , na.color="transparent",bins=cortess)
+
+leaflet(data=map_cdmx_info) %>%  addTiles()%>% 
+  addPolygons(label = ~textoss,
+              
+              weight = 2,
+  opacity = 1,
+  color = "black",
+  dashArray = "3",
+  
+  
+              fillColor = color(map_cdmx_info$Tdbdsdd),
+              fillOpacity=0.7) %>%
+  
+addLegend(pal = color, values = ~map_cdmx_info$Tdbdsdd, opacity = 0.7,
+           title = "Tasa de beneficiarios",
+          position = "bottomright") %>% 
+addProviderTiles("Esri.WorldGrayCanvas")
+
+
+```
