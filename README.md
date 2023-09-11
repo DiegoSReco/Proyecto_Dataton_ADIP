@@ -5,7 +5,7 @@ El objetivo proyecto es explorar si el rol del gobierno de la CDMX así como el 
 
 ¿Cómo respondió el gobierno de la CDMX y los gobiernos locales a los retos de la pandemia por COVID-19 en Alcaldías con colonias declaradas como prioritarias?
 
-![image](https://github.com/DiegoSReco/Proyecto_Dataton_ADIP/assets/98560789/88b84fd2-711f-47cb-bd9a-2bbe0c6c3872)
+![image](https://github.com/DiegoSReco/Proyecto_Dataton_ADIP/assets/98560789/c442e284-01bd-45c1-a9a0-b4145d2f9f77)
 
 
 Agencia Digital de Innovación Pública de la CDMX : https://tianguisdigital.cdmx.gob.mx/bases/wp-content/uploads/2022/01/4.El-rol-de-los-gobiernos-Helenos-de-Troya.docx.pdf
