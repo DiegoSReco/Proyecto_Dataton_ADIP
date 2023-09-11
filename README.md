@@ -5,5 +5,6 @@ El objetivo proyecto es explorar si el rol del gobierno de la CDMX así como el 
 
 ¿Cómo respondió el gobierno de la CDMX y los gobiernos locales a los retos de la pandemia
 por COVID-19 en Alcaldías con colonias declaradas como prioritarias?
+link  Agencia Digital de Innovación Pública de la CDMX : chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://tianguisdigital.cdmx.gob.mx/bases/wp-content/uploads/2022/01/4.El-rol-de-los-gobiernos-Helenos-de-Troya.docx.pdf
 
-https://rpubs.com/helenagova/825710
+Rpubs: https://rpubs.com/helenagova/825710
